@@ -1,7 +1,7 @@
 import json
 from fastapi.logger import logger
 from github import Repository, PullRequest, PullRequestComment, GithubException
-from src.scan.detectors.utils import DetectionType
+from src.scan.detectors.utils import DetectionType, ScanResult
 from src.settings import SCAN_CONTEXT, APP_REPO
 
 
@@ -50,22 +50,34 @@ def get_file_full_content(repo, filename, pr) -> str:
 
 
 def determine_and_comment_scan_status(
-    detections: list[DetectionType],
+    scan_result: ScanResult,
     pr: PullRequest,
     repo: Repository
 ) -> tuple:
     description = "Apiiro malicious-code scan"
+    detections = scan_result["detections"]
+    errors = scan_result["errors"]
     if detections:
         status = "failure"
         comment: PullRequestComment = comment_detections(detections, repo, pr)
         logger.info(
             f"PR #{pr.number} scan found: {json.dumps(detections)}"
         )
-        return status, description, comment
+        if errors:
+            description = f"{description}: {errors[0]}"[:140]
+            logger.error(f"PR #{pr.number} scan errors: {json.dumps(errors)}")
+    elif errors:
+        # Fail closed: detector timeouts/ parsing failures are explicit errors,
+        # never a clean result.
+        status = "error"
+        description = f"{description}: {errors[0]}"[:140]
+        comment = "Scan failed due to an internal error."
+        logger.error(f"PR #{pr.number} scan errors: {json.dumps(errors)}")
     else:
         status = "success"
         comment = "Scan completed successfully."
-        return status, description, comment
+
+    return status, description, comment
 
 
 def comment_detections(

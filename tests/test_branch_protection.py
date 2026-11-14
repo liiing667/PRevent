@@ -20,7 +20,7 @@ def mock_get_branches_lists(setting):
 # Patch the function for testing
 @pytest.fixture(autouse=True)
 def patch_get_branches_lists(monkeypatch):
-    monkeypatch.setattr('src.branch_protection.get_branches_lists', mock_get_branches_lists)
+    monkeypatch.setattr('src.branch_protection.get_secret', mock_get_branches_lists)
 
 
 @pytest.mark.parametrize("repo_name, branch_name, expected", [

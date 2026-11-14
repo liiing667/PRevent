@@ -6,7 +6,7 @@ def test_rewrite_setting():
     setting_name = 'DEBUG'
     new_value = 'True'
 
-    with patch('app.config.get_app_root', return_value='/mock/path'), \
+    with patch('src.config.get_app_root', return_value='/mock/path'), \
          patch('os.path.exists', return_value=True), \
          patch('builtins.open', mock_open()) as mock_file:
 
@@ -14,4 +14,3 @@ def test_rewrite_setting():
 
         # Corrected assertion to match actual write call with leading newline
         mock_file().write.assert_any_call(f"\n{setting_name} = {new_value}\n")
-

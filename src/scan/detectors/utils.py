@@ -18,6 +18,13 @@ class DetectionType(TypedDict, total=False):
     filename: Optional[str]  # Add in handler
 
 
+class ScanResult(TypedDict):
+    # Findings confirmed on added lines and ready to be reported
+    detections: list[DetectionType]
+    # Explicit detector/processing failures; never silently treated as clean
+    errors: list[str]
+
+
 def get_ruleset_dir():
     if not is_git_installed():
         return

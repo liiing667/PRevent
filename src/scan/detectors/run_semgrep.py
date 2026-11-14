@@ -1,6 +1,5 @@
 import os
 import json
-import random
 import subprocess
 from fastapi.logger import logger
 from typing import Optional, Any
@@ -27,11 +26,19 @@ def detect_dynamic_execution_and_obfuscation(
     if temp_file_path and os.path.exists(temp_file_path):
         findings: list = run_semgrep(temp_file_path)
         os.remove(temp_file_path)
-    if findings and not FULL_FINDINGS:
-        while (result := random.choice(findings)) is None:
-            pass
-        return [process_semgrep_finding(result)] if result else []
-    return [result for f in findings if (result := process_semgrep_finding(f)) is not None]
+
+    processed = [
+        result
+        for finding in findings
+        if (result := process_semgrep_finding(finding)) is not None
+    ]
+
+    # Semgrep findings are ordered by file position. Deterministically keep the
+    # first finding instead of drawing a random one so reruns produce the same
+    # terminal finding regardless of thread completion order.
+    if FULL_FINDINGS:
+        return processed
+    return processed[:1]
 
 
 def run_semgrep(temp_file_path: str) -> list[dict[str, Any]]:
