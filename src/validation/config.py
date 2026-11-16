@@ -3,6 +3,7 @@ from cryptography.hazmat.backends import default_backend
 from typing import Any, Union
 from src.secret_manager import get_secret
 from src.settings import SECRET_MANAGER, BLOCK_PR, FP_STRICT, FULL_FINDINGS, WEBHOOK_PORT, JWT_EXPIRY_SECONDS
+from src.validation.webhook import normalize_repo_name, normalize_branch_name
 
 
 def validate_config_parameters() -> None:
@@ -57,11 +58,21 @@ def validate_webhook_secret(value: str) -> None:
 def validate_branches(value: Any) -> None:
     if not isinstance(value, dict):
         raise ValueError("BRANCHES_INCLUDE/EXCLUDE must be a dictionary")
-    for k, v in value.items():
-        if not isinstance(k, str):
-            raise ValueError("Repositories (branch keys) must be strings")
-        if not isinstance(v, (list, str)):
-            raise ValueError("Branch values must be lists or strings")
+    for repo_name, scope in value.items():
+        # Normalizing the key enforces the same "owner/repo" rules as webhook entries.
+        normalize_repo_name(repo_name)
+        if isinstance(scope, str):
+            if scope.strip().lower() != 'all':
+                raise ValueError(
+                    f"String branch scope for {repo_name} must be 'all', got: {scope}"
+                )
+        elif isinstance(scope, list):
+            if not scope:
+                raise ValueError(f"Branch list for {repo_name} must not be empty")
+            for branch_name in scope:
+                normalize_branch_name(branch_name)
+        else:
+            raise ValueError("Branch values must be lists of strings or 'all'")
 
 
 def validate_security_reviewers(value: Any) -> None:

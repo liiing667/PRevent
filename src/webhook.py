@@ -6,8 +6,10 @@ from github.GithubException import GithubException
 from src.github_client import initialize_github_client
 from src.utils.github import create_commit_status
 from src.utils.webhook import (
-    extract_pr_info,
-    extract_review_info
+    extract_pr_identity,
+    extract_review_info,
+    bind_pr_identity,
+    PRIdentity
 )
 from src.branch_protection import (
     is_branch_included,
@@ -30,42 +32,55 @@ class GitHubPRWebhook:
     def on_pull_request(self, webhook_data: dict[str, Any]) -> tuple:
         """
         Process a pull request event:
-        1. Check if the branch is protected.
-        2. Perform a security scan on the pull request.
-        3. Update the commit status based on the scan results.
-        4. Request a security review if the scan failed (optional).
-        5. Block merging until a reviewer's approval is received (optional).
+        1. Validate and normalize the identity carried by the signed payload.
+        2. Check if the branch is monitored (no API call otherwise).
+        3. Bind the payload identity to GitHub's authoritative PR object.
+        4. Perform the security scan using only the bound identity.
+        5. Only on a completed scan: request reviews / adjust protection rules.
+
+        Any validation or binding failure aborts before the first side effect:
+        no file fetching, no comments, no commit statuses, no protection changes.
         """
 
         try:
-            (
-                repo_name,
-                branch_name,
-                pr_number,
-                commit_sha
-            ) = extract_pr_info(webhook_data)
+            identity: PRIdentity = extract_pr_identity(webhook_data)
 
             # Should this branch be scanned?
-            if not is_branch_included(repo_name, branch_name):
+            if not is_branch_included(identity.repo_name, identity.branch_name):
                 return JSONResponse(
-                    content={"message": f"{repo_name}:{branch_name} is not monitored, skipping"},
+                    content={
+                        "message": (
+                            f"{identity.repo_name}:{identity.branch_name} "
+                            "is not monitored, skipping"
+                        )
+                    },
                     status_code=204
                 )
 
             # Requires Repository permissions: Metadata -> Read
-            repo = self.github_client.get_repo(repo_name)
+            repo = self.github_client.get_repo(identity.repo_name)
 
             # Requires Repository Permissions: Pull requests -> Read
-            pr = repo.get_pull(pr_number)
+            pr = repo.get_pull(identity.pr_number)
+
+            # Reject payloads that do not actually describe this PR.
+            bind_pr_identity(repo, pr, identity)
 
             # Malicious-code scan
-            status = process_scan(repo, pr, commit_sha)
+            outcome = process_scan(repo, pr, identity.commit_sha)
+
+            # Every remaining side effect is gated on a completed scan.
+            if not outcome.status_posted:
+                return JSONResponse(
+                    content={"message": "No changed files to scan, no side effects performed"},
+                    status_code=200
+                )
 
             # Trigger a code review (optional)
-            self._request_code_review(status, pr, repo_name)
+            self._request_code_review(outcome.status, pr, identity.repo_name)
 
             # Block merging upon detection (optional)
-            self._handle_block_mode(repo_name, branch_name)
+            self._handle_block_mode(identity.repo_name, identity.branch_name)
 
             return JSONResponse(content={"message": "PR processed successfully"}, status_code=200)
 
@@ -98,6 +113,8 @@ class GitHubPRWebhook:
         """
         1. Apply branch protection upon the first monitored pull request of a protected branch.
         2. Track protected branches.
+        Called only after a scan posted its status, so protection can never
+        deadlock a commit that has no corresponding check.
         """
 
         if self.security_reviewers and BLOCK_PR:
@@ -148,26 +165,44 @@ class GitHubPRWebhook:
         Change check status to "success" upon a pull request review approval event.
         If blocking mode (branch protection) was applied, this will release the block.
         """
-        (
-            repo_name,
-            branch_name,
-            pr_number,
-            review_state,
-            reviewer
-        ) = extract_review_info(webhook_data)
+        try:
+            (
+                repo_name,
+                branch_name,
+                pr_number,
+                review_state,
+                reviewer
+            ) = extract_review_info(webhook_data)
 
-        if review_state.lower() == "approved":
-            logger.info(
-                f"Review approved by {reviewer}: {repo_name}/{branch_name}, PR #{str(pr_number)}"
-            )
-            if reviewer in self.security_reviewers:
-                repo = self.github_client.get_repo(repo_name)
-                pr = repo.get_pull(pr_number)
-                create_commit_status(
-                    repo,
-                    pr.head.sha,
-                    "success",
-                    f"Approved by {reviewer}"
+            if review_state.lower() == "approved":
+                logger.info(
+                    f"Review approved by {reviewer}: {repo_name}/{branch_name}, PR #{str(pr_number)}"
                 )
+                # GitHub logins are case-insensitive; compare against the canonical form.
+                allowed_reviewers = {
+                    member[5:].lower() if member.startswith("team:") else member.lower()
+                    for member in self.security_reviewers
+                }
+                if reviewer in allowed_reviewers:
+                    repo = self.github_client.get_repo(repo_name)
+                    pr = repo.get_pull(pr_number)
+                    create_commit_status(
+                        repo,
+                        pr.head.sha,
+                        "success",
+                        f"Approved by {reviewer}"
+                    )
 
-        return JSONResponse(content={"message": "PR review processed successfully"}, status_code=200)
+            return JSONResponse(
+                content={"message": "PR review processed successfully"},
+                status_code=200
+            )
+        except KeyError as e:
+            logger.error(f"Missing key in payload: {e}")
+            return JSONResponse(content={"error": f"Missing key: {e}"}, status_code=400)
+        except ValueError as e:
+            logger.error(f"Invalid value encountered: {e}")
+            return JSONResponse(content={"error": f"Invalid value: {e}"}, status_code=400)
+        except GithubException as e:
+            logger.error(f"GitHub API error: {e}")
+            return JSONResponse(content={"error": "GitHub API request failed"}, status_code=502)

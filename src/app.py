@@ -41,9 +41,9 @@ def handle_event(
     webhook_data: dict[str, Any]
 ) -> tuple[Response, int]:
     if event_type == 'pull_request':
-        webhook_listener.on_pull_request(webhook_data)
+        return webhook_listener.on_pull_request(webhook_data)
     elif event_type == 'pull_request_review' and get_secret('SECURITY_REVIEWERS'):
-        webhook_listener.on_pull_request_review(webhook_data)
+        return webhook_listener.on_pull_request_review(webhook_data)
     return JSONResponse(content={"message": "Webhook received"}, status_code=200)
 
 

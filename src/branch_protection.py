@@ -3,6 +3,33 @@ from fastapi.logger import logger
 from src.secret_manager import get_secret, set_secret
 from src.github_client import token_headers
 from src.settings import SCAN_CONTEXT
+from src.validation.webhook import normalize_repo_name, normalize_branch_name
+
+
+def _normalize_branch_scope(scope: dict) -> dict:
+    """
+    Canonicalize BRANCHES_INCLUDE/BRANCHES_EXCLUDE configuration so it is
+    compared under the same rules as the validated webhook identity:
+    repository keys lowercased, branch entries trimmed; the 'all' marker
+    and list-vs-string shapes are preserved.
+    """
+    normalized = {}
+    for repo_name, branches in scope.items():
+        canonical_repo = normalize_repo_name(repo_name)
+        if isinstance(branches, str):
+            value = branches.strip().lower()
+        else:
+            value = [normalize_branch_name(branch) for branch in branches]
+        normalized[canonical_repo] = value
+    return normalized
+
+
+def _branch_in_scope(scope_value, branch_name: str) -> bool:
+    if scope_value == 'all':
+        return True
+    if isinstance(scope_value, list):
+        return branch_name in scope_value
+    return False
 
 
 def is_branch_included(repo_name, branch_name) -> bool:
@@ -18,20 +45,22 @@ def is_branch_included(repo_name, branch_name) -> bool:
     Returns:
         bool: True if the branch is included, False if excluded or not explicitly included.
     """
-    include_branches = get_secret('BRANCHES_INCLUDE')
-    exclude_branches = get_secret('BRANCHES_EXCLUDE')
+    repo_name = normalize_repo_name(repo_name)
+    branch_name = normalize_branch_name(branch_name)
+
+    include_branches = _normalize_branch_scope(get_secret('BRANCHES_INCLUDE'))
+    exclude_branches = _normalize_branch_scope(get_secret('BRANCHES_EXCLUDE'))
 
     if repo_name in exclude_branches:
-        if exclude_branches[repo_name] == 'all' or branch_name in exclude_branches[repo_name]:
+        if _branch_in_scope(exclude_branches[repo_name], branch_name):
             return False
     
     if include_branches:
         if repo_name not in include_branches:
             return False
-        elif include_branches[repo_name] == 'all':
+        elif _branch_in_scope(include_branches[repo_name], branch_name):
             return True
-        elif branch_name not in include_branches[repo_name]:
-            return False
+        return False
 
     return True
 

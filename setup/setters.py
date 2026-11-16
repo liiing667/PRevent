@@ -155,7 +155,7 @@ def set_security_reviewers(secret_manager: str, security_reviewers_key: str) -> 
 def set_branches_scope(secret_manager: str, branches_include_key: str, branches_exclude_key: str) -> None:
     def list_branches() -> dict:
         print("(verify inputs for typos and correct format)")
-        print("Format: repo_a:branch1,branch3 repo_b:all")
+        print("Format: owner/repo_a:branch1,branch3 owner/repo_b:all")
         all_repos_branches = {}
         while True:
             user_input = input("Repository and branches: ").strip()

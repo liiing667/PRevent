@@ -9,8 +9,8 @@ def test_process_diff_with_additions():
     diff = "some diff content"
     expected_additions = [(1, "added line")]
     
-    with patch('src.scan.patch_utils.remove_comments', return_value=diff) as mock_remove_comments, \
-         patch('src.scan.patch_utils.get_additions_with_line_numbers', return_value=expected_additions) \
+    with patch('src.utils.diffs.remove_comments', return_value=diff) as mock_remove_comments, \
+         patch('src.utils.diffs.get_additions_with_line_numbers', return_value=expected_additions) \
          as mock_get_additions:
         result = process_diff(diff, lang)
         assert result == expected_additions
@@ -22,8 +22,8 @@ def test_process_diff_with_no_additions():
     diff = "some diff content"
     expected_additions = []
     
-    with patch('src.scan.patch_utils.remove_comments', return_value=diff) as mock_remove_comments, \
-         patch('src.scan.patch_utils.get_additions_with_line_numbers', return_value=expected_additions) \
+    with patch('src.utils.diffs.remove_comments', return_value=diff) as mock_remove_comments, \
+         patch('src.utils.diffs.get_additions_with_line_numbers', return_value=expected_additions) \
          as mock_get_additions:
         result = process_diff(diff, lang)
         assert result == expected_additions
@@ -39,15 +39,15 @@ def test_process_diff_with_no_additions():
         ("Ruby", "puts 'Hello'\n=begin\ncomment block\n=end", "puts 'Hello'\n"),
         ("HTML", "<div>content</div><!-- comment -->", "<div>content</div>"),
         ("SQL", "SELECT * FROM table -- comment", "SELECT * FROM table "),
-        ("C", "int main() { /* comment */ }", "int main() {  }"),
+        ("C", "int main() { /* comment */ }", "int main() { }"),
         ("JavaScript", "let x = 5; // inline comment", "let x = 5; "),
         ("Go", "func main() { } // comment", "func main() { } "),
         ("Lua", "print('hello') --[[ comment ]]", "print('hello') "),
         ("Clojure", "(defn foo []) ; comment", "(defn foo []) ")
     ]
 )
-def test_remove_comments(_lang, diff, expected_result):
-    result = remove_comments(diff, _lang)
+def test_remove_comments(lang, diff, expected_result):
+    result = remove_comments(diff, lang)
     assert result.strip() == expected_result.strip()
 
 

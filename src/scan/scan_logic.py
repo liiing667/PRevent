@@ -1,5 +1,6 @@
 import os
 import concurrent.futures
+from dataclasses import dataclass
 from fastapi.logger import logger
 from github import Repository, PullRequest
 from typing import Optional, Callable
@@ -22,15 +23,30 @@ from src.utils.github import (
 )
 from src.utils.diffs import process_diff
 from src.settings import APP_REPO, FP_STRICT, FULL_FINDINGS
+from src.validation.webhook import normalize_sha
+
+
+@dataclass(frozen=True)
+class ScanOutcome:
+    """Result of a scan. `status_posted` indicates a side effect occurred."""
+    status: str
+    status_posted: bool
 
 
 def process_scan(
     repo: Repository,
     pr: PullRequest,
     commit_sha: str
-) -> str:
+) -> ScanOutcome:
+    # Defense in depth: the commit status must target the PR's actual head,
+    # never an attacker-controlled SHA smuggled through the payload.
+    verified_sha = normalize_sha(commit_sha)
+    if normalize_sha(pr.head.sha) != verified_sha:
+        raise ValueError("Commit SHA does not match the pull request head")
+
     # "success" status if no files were changed
     status = "success"
+    status_posted = False
 
     # Get full files for proper code analysis. PR contains only diffs.
     changed_files = get_changed_files(repo, pr)
@@ -40,8 +56,9 @@ def process_scan(
         status, description, comment = determine_and_comment_scan_status(scan_results, pr, repo)
         target_url = comment.html_url if hasattr(comment, 'html_url') else APP_REPO
         create_commit_status(repo, commit_sha, status, description, target_url)
+        status_posted = True
 
-    return status
+    return ScanOutcome(status=status, status_posted=status_posted)
 
 
 def scan_additions(

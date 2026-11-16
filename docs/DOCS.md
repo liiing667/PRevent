@@ -6,8 +6,8 @@
 | GITHUB_APP_PRIVATE_KEY    | Authenticates the app with GitHub                  | GitHub | yes      | str                    | -       | -----BEGIN RSA...    | critical    |
 | GITHUB_APP_INTEGRATION_ID | Authenticates the app with GitHub (app ID)         | GitHub | yes      | str                    | -       | 1234567              | high        |
 | WEBHOOK_SECRET            | Validates requests source (>32 random characters)  | GitHub | yes      | str                    | -       | 039e362cd52...       | high        |
-| BRANCHES_INCLUDE          | Repos and branches to scan (all by default)        | user   | no       | dict[str, list \| str] | {}      | {'r1': ['b1', 'b2']} | medium      |
-| BRANCHES_EXCLUDE          | Repos and branches to not scan                     | user   | no       | dict[str, list \| str] | {}      | {'r': 'all'}         | medium      |
+| BRANCHES_INCLUDE          | Repos and branches to scan (all by default)        | user   | no       | dict[str, list \| str] | {}      | {'owner/r1': ['b1', 'b2']} | medium      |
+| BRANCHES_EXCLUDE          | Repos and branches to not scan                     | user   | no       | dict[str, list \| str] | {}      | {'owner/r': 'all'}  | medium      |
 | SECURITY_REVIEWERS        | GitHub accounts and teams to review detections     | user   | no       | list                   | []      | ['jdoe', 'team:sec'] | medium      |
 | BLOCK_PR                  | Block merging in pull requests with detections     | user   | no       | bool                   | False   | True                 | low         |
 | FP_STRICT                 | Run only `ERROR` severity rules, exclude `WARNING` | user   | no       | bool                   | False   | True                 | low         |
