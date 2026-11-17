@@ -46,8 +46,8 @@ def test_process_diff_with_no_additions():
         ("Clojure", "(defn foo []) ; comment", "(defn foo []) ")
     ]
 )
-def test_remove_comments(_lang, diff, expected_result):
-    result = remove_comments(diff, _lang)
+def test_remove_comments(lang, diff, expected_result):
+    result = remove_comments(diff, lang)
     assert result.strip() == expected_result.strip()
 
 

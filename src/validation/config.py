@@ -1,8 +1,8 @@
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from typing import Any, Union
-from src.secret_manager import get_secret
-from src.settings import SECRET_MANAGER, BLOCK_PR, FP_STRICT, FULL_FINDINGS, WEBHOOK_PORT, JWT_EXPIRY_SECONDS
+from src.secret_manager import get_secret, validate_scope
+from src.settings import SECRET_MANAGER, BLOCK_PR, FP_STRICT, FULL_FINDINGS, WEBHOOK_PORT, JWT_EXPIRY_SECONDS, SECRET_SCOPE
 
 
 def validate_config_parameters() -> None:
@@ -15,6 +15,7 @@ def validate_config_parameters() -> None:
     validate_full_findings(FULL_FINDINGS)
     validate_webhook_port(WEBHOOK_PORT)
     validate_jwt_expiry_seconds(JWT_EXPIRY_SECONDS)
+    validate_secret_scope(SECRET_SCOPE)
 
     # Secrets
     validate_github_app_integration_id(get_secret('GITHUB_APP_INTEGRATION_ID'))
@@ -33,15 +34,29 @@ def validate_secret_manager(value: str) -> None:
         raise ValueError(f"SECRET_MANAGER must be one of: {', '.join(allowed_values)}")
 
 
+def validate_secret_scope(value: Any) -> None:
+    if value in (None, ''):
+        return None
+    if not isinstance(value, str):
+        raise ValueError("SECRET_SCOPE must be a string")
+    # Reuse the boundary validation; never echoes secret values.
+    validate_scope(value)
+
+
 def validate_github_app_private_key(value: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError("GITHUB_APP_PRIVATE_KEY must be a PEM-encoded private key string")
     try:
         serialization.load_pem_private_key(
             value.encode(),
             password=None,
             backend=default_backend() 
         ) 
-    except Exception as e: 
-        raise ValueError(f"Invalid GITHUB_APP_PRIVATE_KEY: {e}")
+    except Exception:
+        # Do not include the underlying error: it may echo key material.
+        raise ValueError(
+            "Invalid GITHUB_APP_PRIVATE_KEY: expected an unencrypted PEM private key"
+        ) from None
 
 
 def validate_github_app_integration_id(value: Union[str, int]) -> None:

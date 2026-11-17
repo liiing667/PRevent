@@ -4,6 +4,10 @@ import os
 # Options: aws, azure, gcloud, vault, local (vault)
 SECRET_MANAGER = 'local'
 
+# Optional tenant/environment namespace prefixed to every secret key on every
+# backend, isolating configs that share the same backend. Leave empty to disable.
+SECRET_SCOPE = ''
+
 # Don't run WARNING severity detectors (many), run only ERROR severity detectors (few).
 FP_STRICT = False
 

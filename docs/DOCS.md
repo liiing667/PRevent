@@ -3,6 +3,7 @@
 | Parameter                 | Purpose                                            | Source | Required | Type                   | Default | Example              | Sensitivity |
 |---------------------------|----------------------------------------------------|--------|----------|------------------------|---------|----------------------|-------------|
 | SECRET_MANAGER            | SM to use (cli client, Python package, calls)      | user   | yes      | str                    | vault   | aws                  | low         |
+| SECRET_SCOPE              | Tenant/env namespace prefixed to all secret keys   | user   | no       | str                    | ''      | 'team-a/prod'        | low         |
 | GITHUB_APP_PRIVATE_KEY    | Authenticates the app with GitHub                  | GitHub | yes      | str                    | -       | -----BEGIN RSA...    | critical    |
 | GITHUB_APP_INTEGRATION_ID | Authenticates the app with GitHub (app ID)         | GitHub | yes      | str                    | -       | 1234567              | high        |
 | WEBHOOK_SECRET            | Validates requests source (>32 random characters)  | GitHub | yes      | str                    | -       | 039e362cd52...       | high        |
